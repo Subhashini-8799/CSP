@@ -1,6 +1,8 @@
 from tkinter import *
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 
 # Symptom list
 l1 = ['back_pain', 'constipation', 'abdominal_pain', 'diarrhoea', 'mild_fever', 
@@ -19,12 +21,25 @@ disease = ['Fungal infection', 'Allergy', 'GERD', 'Chronic cholestasis', 'Drug R
            'Tuberculosis', 'Common Cold', 'Pneumonia', 'Piles', 'Heart Attack']
 
 # Load dataset
-df = pd.read_csv("Training.csv")
-tr = pd.read_csv("Testing.csv")
+try:
+    df = pd.read_csv("Training.csv")
+    tr = pd.read_csv("Testing.csv")
+except FileNotFoundError:
+    print("Training.csv or Testing.csv not found.")
+    exit()
 
-# Convert prognosis to numerical values
-df.replace({'prognosis': {d: i for i, d in enumerate(disease)}}, inplace=True)
-tr.replace({'prognosis': {d: i for i, d in enumerate(disease)}}, inplace=True)
+# Map disease names to integers and reverse
+disease_mapping = {d: i for i, d in enumerate(disease)}
+reverse_mapping = {i: d for d, i in disease_mapping.items()}
+
+# Clean and encode the prognosis column
+df = df[df['prognosis'].isin(disease_mapping)]
+df['prognosis'] = df['prognosis'].map(disease_mapping)
+df.dropna(subset=['prognosis'], inplace=True)
+
+tr = tr[tr['prognosis'].isin(disease_mapping)]
+tr['prognosis'] = tr['prognosis'].map(disease_mapping)
+tr.dropna(subset=['prognosis'], inplace=True)
 
 # Ensure only existing symptoms are used
 existing_symptoms = [symptom for symptom in l1 if symptom in df.columns]
@@ -35,37 +50,21 @@ y = df["prognosis"]
 X_test = tr[existing_symptoms]
 y_test = tr["prognosis"]
 
-# Random Forest Classifier
-def randomforest():
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.metrics import accuracy_score
-
-    clf = RandomForestClassifier()
-    clf.fit(X, y)
-
-    y_pred = clf.predict(X_test)
-    print("Accuracy:", accuracy_score(y_test, y_pred))
-
-    psymptoms = [Symptom1.get(), Symptom2.get(), Symptom3.get(), Symptom4.get(), Symptom5.get()]
-    l2 = [1 if symptom in psymptoms else 0 for symptom in existing_symptoms]
-
-    inputtest = [l2]
-    predict = clf.predict(inputtest)[0]
-
-    t1.delete("1.0", END)
-    t1.insert(END, disease[predict])
+# Train model
+clf = RandomForestClassifier()
+clf.fit(X, y)
 
 # GUI Setup
 root = Tk()
 root.configure(background='light green')
+root.title("Disease Predictor")
 
-# Entry variables
 Symptom1, Symptom2, Symptom3, Symptom4, Symptom5 = [StringVar(value="None") for _ in range(5)]
 Name = StringVar()
 
 # Heading
-w2 = Label(root, text="Disease Predictor using Machine Learning", fg="white", bg="light green", font=("Elephant", 20))
-w2.grid(row=1, column=0, columnspan=2, padx=100)
+Label(root, text="Disease Predictor using Machine Learning", fg="white", bg="light green",
+      font=("Elephant", 20)).grid(row=1, column=0, columnspan=2, padx=100, pady=20)
 
 # Labels
 Label(root, text="Name of the Patient", fg="yellow", bg="black").grid(row=6, column=0, pady=15, sticky=W)
@@ -75,7 +74,7 @@ Label(root, text="Symptom 3", fg="yellow", bg="black").grid(row=9, column=0, pad
 Label(root, text="Symptom 4", fg="yellow", bg="black").grid(row=10, column=0, pady=10, sticky=W)
 Label(root, text="Symptom 5", fg="yellow", bg="black").grid(row=11, column=0, pady=10, sticky=W)
 
-# Entries
+# Dropdowns
 OPTIONS = sorted(existing_symptoms)
 Entry(root, textvariable=Name).grid(row=6, column=1)
 OptionMenu(root, Symptom1, *OPTIONS).grid(row=7, column=1)
@@ -84,11 +83,27 @@ OptionMenu(root, Symptom3, *OPTIONS).grid(row=9, column=1)
 OptionMenu(root, Symptom4, *OPTIONS).grid(row=10, column=1)
 OptionMenu(root, Symptom5, *OPTIONS).grid(row=11, column=1)
 
-# Buttons
-Button(root, text="Predict Disease", command=randomforest, bg="green", fg="yellow").grid(row=8, column=3, padx=10)
+# Predict Function
+def randomforest():
+    psymptoms = [Symptom1.get(), Symptom2.get(), Symptom3.get(), Symptom4.get(), Symptom5.get()]
+    if all(s == "None" for s in psymptoms):
+        t1.delete("1.0", END)
+        t1.insert(END, "Please select at least one symptom.")
+        return
+    
+    l2 = [1 if symptom in psymptoms else 0 for symptom in existing_symptoms]
+    inputtest = [l2]
+    prediction = clf.predict(inputtest)[0]
+    predicted_disease = reverse_mapping.get(prediction, "Unknown")
+    
+    t1.delete("1.0", END)
+    t1.insert(END, predicted_disease)
 
-# Result Textbox
+# Predict Button
+Button(root, text="Predict Disease", command=randomforest, bg="green", fg="yellow").grid(row=13, column=1, pady=20)
+
+# Output Textbox
 t1 = Text(root, height=1, width=40, bg="orange", fg="black")
-t1.grid(row=15, column=1, padx=10)
+t1.grid(row=15, column=1, padx=10, pady=10)
 
 root.mainloop()
